@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompt API - Gemini Nano</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            font-family: Arial, Helvetica, sans-serif;
+            line-height: 1.5;
+        }
+
+        body {
+            margin: 0;
+            padding: 32px;
+            background: Canvas;
+            color: CanvasText;
+        }
+
+        main {
+            max-width: 760px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 1.75rem;
+        }
+
+        button {
+            cursor: pointer;
+            padding: 10px 16px;
+            border: 1px solid #6b7280;
+            border-radius: 6px;
+            background: #1a73e8;
+            color: #fff;
+            font: inherit;
+        }
+
+        button:disabled {
+            cursor: wait;
+            opacity: 0.7;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        textarea {
+            box-sizing: border-box;
+            width: 100%;
+            min-height: 110px;
+            margin-bottom: 12px;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font: inherit;
+            resize: vertical;
+        }
+
+        .attachments {
+            display: grid;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .file-field {
+            display: grid;
+            gap: 6px;
+        }
+
+        input[type="file"] {
+            width: 100%;
+            font: inherit;
+        }
+
+        #status {
+            margin: 16px 0;
+            font-weight: 700;
+        }
+
+        #output {
+            display: block;
+            min-height: 120px;
+            padding: 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            white-space: normal;
+        }
+
+        .error {
+            color: #b00020;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Prompt API - Gemini Nano</h1>
+        <label for="question">Pergunta</label>
+        <textarea id="question" placeholder="Digite sua pergunta aqui...">Quem inventou o JavaScript?</textarea>
+        <div class="attachments">
+            <div class="file-field">
+                <label for="imageInput">Imagem</label>
+                <input id="imageInput" type="file" accept="image/*">
+            </div>
+            <div class="file-field">
+                <label for="audioInput">Audio</label>
+                <input id="audioInput" type="file" accept="audio/*">
+            </div>
+        </div>
+        <button id="runButton" type="button">Gerar resposta</button>
+        <p id="status">Aguardando interacao.</p>
+        <output id="output"></output>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/markdown@0.5.0/lib/markdown.min.js"></script>
+    <script>
+        const runButton = document.getElementById("runButton");
+        const questionInput = document.getElementById("question");
+        const imageInput = document.getElementById("imageInput");
+        const audioInput = document.getElementById("audioInput");
+        const status = document.getElementById("status");
+        const output = document.getElementById("output");
+
+        function renderMarkdown(text) {
+            if (window.markdown && typeof window.markdown.toHTML === "function") {
+                output.innerHTML = window.markdown.toHTML(text);
+                return;
+            }
+
+            output.textContent = text;
+        }
+
+        function showError(error) {
+            console.error(error);
+            status.textContent = "Erro ao executar a Prompt API.";
+            status.classList.add("error");
+            output.textContent = error instanceof Error ? error.message : String(error);
+        }
+
+        function createPromptPayload(question, imageFile, audioFile) {
+            if (!imageFile && !audioFile) {
+                return question;
+            }
+
+            const content = [
+                {
+                    type: "text",
+                    value: question
+                }
+            ];
+
+            if (imageFile) {
+                content.push({
+                    type: "image",
+                    value: imageFile
+                });
+            }
+
+            if (audioFile) {
+                content.push({
+                    type: "audio",
+                    value: audioFile
+                });
+            }
+
+            return [
+                {
+                    role: "user",
+                    content
+                }
+            ];
+        }
+
+        function createModelOptions(imageFile, audioFile) {
+            const expectedInputs = [
+                {
+                    type: "text"
+                }
+            ];
+
+            if (imageFile) {
+                expectedInputs.push({
+                    type: "image"
+                });
+            }
+
+            if (audioFile) {
+                expectedInputs.push({
+                    type: "audio"
+                });
+            }
+
+            return {
+                expectedInputs,
+                expectedOutputs: [
+                    {
+                        type: "text"
+                    }
+                ]
+            };
+        }
+
+        async function runPrompt() {
+            status.classList.remove("error");
+            runButton.disabled = true;
+            output.textContent = "";
+
+            try {
+                const question = questionInput.value.trim();
+                const imageFile = imageInput.files[0];
+                const audioFile = audioInput.files[0];
+
+                if (!question) {
+                    throw new Error("Digite uma pergunta ou instrucao antes de gerar a resposta.");
+                }
+
+                if (!("LanguageModel" in window)) {
+                    throw new Error(
+                        "LanguageModel nao esta disponivel. Verifique as flags do Chrome e abra a pagina via localhost."
+                    );
+                }
+
+                const modelOptions = createModelOptions(imageFile, audioFile);
+
+                status.textContent = "Verificando disponibilidade do modelo...";
+                const availability = await LanguageModel.availability(modelOptions);
+
+                if (availability === "unavailable") {
+                    throw new Error(
+                        "O Gemini Nano esta indisponivel neste ambiente. Verifique versao do Chrome, hardware, espaco em disco e flags."
+                    );
+                }
+
+                status.textContent = availability === "available"
+                    ? "Criando sessao..."
+                    : "Preparando download do modelo...";
+
+                const session = await LanguageModel.create({
+                    ...modelOptions,
+                    initialPrompts: [
+                        {
+                            role: "system",
+                            content: "Voce e um assistente de IA que analisa textos, imagens e audios de forma clara e objetiva."
+                        }
+                    ],
+                    monitor(monitor) {
+                        monitor.addEventListener("downloadprogress", (event) => {
+                            if (availability === "downloadable" || availability === "downloading") {
+                                status.textContent = `Baixando modelo: ${Math.round(event.loaded * 100)}%`;
+                            }
+                        });
+                    }
+                });
+
+                status.textContent = "Gerando resposta...";
+                const promptPayload = createPromptPayload(question, imageFile, audioFile);
+                const responseStream = session.promptStreaming(promptPayload);
+                let fullText = "";
+
+                for await (const token of responseStream) {
+                    fullText += token;
+                    renderMarkdown(fullText);
+                }
+
+                status.textContent = "Resposta gerada.";
+                session.destroy();
+            } catch (error) {
+                showError(error);
+            } finally {
+                runButton.disabled = false;
+            }
+        }
+
+        runButton.addEventListener("click", runPrompt);
+    </script>
+</body>
+</html>
