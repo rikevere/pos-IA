@@ -38,6 +38,17 @@
             font: inherit;
         }
 
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .secondary-button {
+            background: Canvas;
+            color: CanvasText;
+        }
+
         button:disabled {
             cursor: wait;
             opacity: 0.7;
@@ -111,7 +122,10 @@
                 <input id="audioInput" type="file" accept="audio/*">
             </div>
         </div>
-        <button id="runButton" type="button">Gerar resposta</button>
+        <div class="actions">
+            <button id="runButton" type="button">Gerar resposta</button>
+            <button id="clearButton" class="secondary-button" type="button">Limpar</button>
+        </div>
         <p id="status">Aguardando interacao.</p>
         <output id="output"></output>
     </main>
@@ -119,6 +133,7 @@
     <script src="https://cdn.jsdelivr.net/npm/markdown@0.5.0/lib/markdown.min.js"></script>
     <script>
         const runButton = document.getElementById("runButton");
+        const clearButton = document.getElementById("clearButton");
         const questionInput = document.getElementById("question");
         const imageInput = document.getElementById("imageInput");
         const audioInput = document.getElementById("audioInput");
@@ -204,6 +219,16 @@
             };
         }
 
+        function clearForm() {
+            questionInput.value = "";
+            imageInput.value = "";
+            audioInput.value = "";
+            output.textContent = "";
+            status.textContent = "Aguardando interacao.";
+            status.classList.remove("error");
+            questionInput.focus();
+        }
+
         async function runPrompt() {
             status.classList.remove("error");
             runButton.disabled = true;
@@ -277,6 +302,7 @@
 
 
         runButton.addEventListener("click", runPrompt);
+        clearButton.addEventListener("click", clearForm);
     </script>
 </body>
 </html>
